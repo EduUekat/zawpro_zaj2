@@ -1,3 +1,4 @@
 konflikt z zadania na laby
 Linijka numer 1
 Linijka numer 2
+Linijka numer 3
