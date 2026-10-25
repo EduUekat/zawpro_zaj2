@@ -1,0 +1,30 @@
+name: CI Code Quality (PEP8)
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  pycodestyle-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Pobierz kod z repozytorium (Checkout)
+        uses: actions/checkout@v4
+
+      - name: Konfiguracja środowiska Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalacja zależności
+        run: |
+          python -m pip install --upgrade pip
+          pip install pycodestyle
+
+      - name: Uruchomienie walidacji pycodestyle
+        run: |
+          # Flaga --count sprawi, że pipeline zwróci błąd (exit code 1), jeśli styl kodu jest niezgodny z PEP8
+          pycodestyle --count --statistics .
