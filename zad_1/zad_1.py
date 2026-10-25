@@ -2,7 +2,7 @@ class Student:
 
     def __init__(self, name, marks):
         self.name = name
-        self.marks = marks  # lista ocen
+        self.marks = marks
 
     def is_passed(self):
         if not self.marks:
