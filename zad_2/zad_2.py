@@ -2,7 +2,7 @@ import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from zad_1.zad_1 import Student
+from zad_1.zad_1 import Student # noqa: E402
 
 
 class Library:
