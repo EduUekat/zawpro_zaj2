@@ -12,15 +12,15 @@ def produce_task():
         "type": "phone_call",
         "status": "pending",
         "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "consumer_id": "",
+        "consumer_id": None,
     }
     add_task(task)
-    print(f"[Producer] Dodano zadanie do pliku txt: ID {task_id}")
+    print(f"[Producer] Dodano zadanie do bazy SQLite: ID {task_id}")
 
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--batch":
-        print("[Producer] Generowanie 100 zadań do pliku txt...")
+        print("[Producer] Generowanie 100 zadań do bazy SQLite...")
         for _ in range(100):
             produce_task()
         print("[Producer] Pomyślnie dodano 100 zadań!")

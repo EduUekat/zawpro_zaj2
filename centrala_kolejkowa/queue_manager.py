@@ -1,70 +1,112 @@
-import csv
+import sqlite3
 import os
 
-QUEUE_FILE = "queue.txt"
-FIELDNAMES = ["id", "type", "status", "created_at", "consumer_id"]
+DB_FILE = "queue.db"
 
 
-def init_queue():
-    """Inicjalizuje plik tekstowy kolejki wraz z nagłówkiem, jeśli nie istnieje."""
-    if not os.path.exists(QUEUE_FILE):
-        with open(QUEUE_FILE, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
-            writer.writeheader()
+def init_db():
+    """Inicjalizuje bazę danych SQLite oraz tabelę tasks, jeśli nie istnieją."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tasks (
+            id TEXT PRIMARY KEY,
+            type TEXT,
+            status TEXT,
+            created_at TEXT,
+            consumer_id TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
 
 
 def add_task(task_data):
-    """Dodaje nowe zadanie ze statusem 'pending' do pliku txt."""
-    init_queue()
-    with open(QUEUE_FILE, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
-        writer.writerow(task_data)
+    """Dodaje nowe zadanie ze statusem 'pending' do bazy SQLite."""
+    init_db()
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO tasks (id, type, status, created_at, consumer_id)
+        VALUES (?, ?, ?, ?, ?)
+    """,
+        (
+            task_data["id"],
+            task_data["type"],
+            task_data["status"],
+            task_data["created_at"],
+            task_data.get("consumer_id"),
+        ),
+    )
+    conn.commit()
+    conn.close()
 
 
 def claim_next_pending_task(consumer_id: str):
-    """Wyszukuje pierwsze zadanie ze statusem 'pending', zmienia status na
+    """Wyszukuje pierwsze zadanie ze statusem 'pending', zmienia jego status na
 
-    'in_progress' i przypisuje konsumenta (operacja atomowa).
+    'in_progress' i przypisuje konsumenta w ramach bezpiecznej transakcji.
     """
-    init_queue()
-    rows = []
-    claimed_task = None
+    init_db()
+    conn = sqlite3.connect(DB_FILE)
+    conn.isolation_level = "IMMEDIATE"
+    cursor = conn.cursor()
 
-    with open(QUEUE_FILE, "r", newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            if row["status"] == "pending" and not claimed_task:
-                row["status"] = "in_progress"
-                row["consumer_id"] = consumer_id
-                claimed_task = dict(row)
-            rows.append(row)
+    try:
+        cursor.execute("SELECT id FROM tasks WHERE status = 'pending' LIMIT 1")
+        row = cursor.fetchone()
 
-    if claimed_task:
-        with open(QUEUE_FILE, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
-            writer.writeheader()
-            writer.writerows(rows)
-        return claimed_task
+        if row:
+            task_id = row[0]
+            cursor.execute(
+                """
+                UPDATE tasks
+                SET status = 'in_progress', consumer_id = ?
+                WHERE id = ?
+            """,
+                (consumer_id, task_id),
+            )
+
+            cursor.execute(
+                """
+                SELECT id, type, status, created_at, consumer_id
+                FROM tasks WHERE id = ?
+            """,
+                (task_id,),
+            )
+            updated_row = cursor.fetchone()
+            conn.commit()
+
+            return {
+                "id": updated_row[0],
+                "type": updated_row[1],
+                "status": updated_row[2],
+                "created_at": updated_row[3],
+                "consumer_id": updated_row[4],
+            }
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
     return None
 
 
 def update_task_status(task_id: str, new_status: str):
-    """Aktualizuje status zadania w pliku txt."""
-    init_queue()
-    rows = []
-    updated = False
-
-    with open(QUEUE_FILE, "r", newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            if row["id"] == task_id:
-                row["status"] = new_status
-                updated = True
-            rows.append(row)
-
-    if updated:
-        with open(QUEUE_FILE, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
-            writer.writeheader()
-            writer.writerows(rows)
+    """Aktualizuje status zadania w bazie SQLite (np. na 'done')."""
+    init_db()
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE tasks
+        SET status = ?
+        WHERE id = ?
+    """,
+        (new_status, task_id),
+    )
+    conn.commit()
+    conn.close()

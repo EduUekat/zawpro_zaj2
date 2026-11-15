@@ -4,7 +4,10 @@ from queue_manager import claim_next_pending_task, update_task_status
 
 
 def consume_loop(consumer_id: str):
-    print(f"[Consumer {consumer_id}] Uruchomiony. Nasłuchiwanie na zadania (co 5s)...")
+    print(
+        f"[Consumer {consumer_id}] Uruchomiony. Nasłuchiwanie na zadania w SQLite"
+        " (co 5s)..."
+    )
     while True:
         task = claim_next_pending_task(consumer_id)
         if task:
