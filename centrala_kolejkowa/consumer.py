@@ -1,30 +1,43 @@
 import sys
 import time
-from queue_manager import claim_next_pending_task, update_task_status
+import json
+import pika
+
+QUEUE_NAME = "task_queue"
+
+
+def callback(ch, method, properties, body):
+    task = json.loads(body)
+    task_id = task["id"]
+    consumer_id = sys.argv[1] if len(sys.argv) > 1 else "1"
+
+    print(
+        f"[Consumer {consumer_id}] Pobrano zadanie {task_id}. Wykonywanie" " (30s)..."
+    )
+
+    time.sleep(30)
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+    print(f"[Consumer {consumer_id}] Zakończono i potwierdzono zadanie {task_id}.")
 
 
 def consume_loop(consumer_id: str):
+    params = pika.ConnectionParameters(host="localhost", port=8081)
+    connection = pika.BlockingConnection(params)
+    channel = connection.channel()
+
+    channel.queue_declare(queue=QUEUE_NAME, durable=True)
+    channel.basic_qos(prefetch_count=1)
+    channel.basic_consume(queue=QUEUE_NAME, on_message_callback=callback)
+
     print(
-        f"[Consumer {consumer_id}] Uruchomiony. Nasłuchiwanie na zadania w SQLite"
-        " (co 5s)..."
+        f"[Consumer {consumer_id}] Nasłuchiwanie na zadania w RabbitMQ... (Ctrl+C"
+        " aby zatrzymać)"
     )
-    while True:
-        task = claim_next_pending_task(consumer_id)
-        if task:
-            task_id = task["id"]
-            print(
-                f"[Consumer {consumer_id}] Pobrano zadanie {task_id}. Status:"
-                " in_progress. Wykonywanie (30s)..."
-            )
-
-            time.sleep(30)
-
-            update_task_status(task_id, "done")
-            print(
-                f"[Consumer {consumer_id}] Zakończono zadanie {task_id}. Status: done."
-            )
-        else:
-            time.sleep(5)
+    try:
+        channel.start_consuming()
+    except KeyboardInterrupt:
+        channel.stop_consuming()
+    connection.close()
 
 
 if __name__ == "__main__":
