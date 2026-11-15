@@ -9,7 +9,6 @@ on:
 jobs:
   pycodestyle-check:
     runs-on: ubuntu-latest
-
     steps:
       - name: Pobierz kod z repozytorium (Checkout)
         uses: actions/checkout@v4
